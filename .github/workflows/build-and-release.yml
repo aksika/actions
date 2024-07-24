@@ -1,0 +1,72 @@
+name: Build and Release KrbRelay
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+      with:
+        repository: cube0x0/KrbRelay
+
+    - name: Set up .NET Framework
+      uses: microsoft/setup-msbuild@v1.0.3
+
+    - name: Restore dependencies
+      run: nuget restore KrbRelay/KrbRelay.sln
+
+    - name: Build
+      run: msbuild KrbRelay/KrbRelay.sln /p:Configuration=Release /p:TargetFrameworkVersion=v4.7
+
+    - name: Create Release Artifact
+      run: |
+        cd KrbRelay/bin/Release
+        mkdir artifact
+        mv KrbRelay.exe artifact/
+        zip -r KrbRelay.zip artifact/
+
+    - name: Upload Release Artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: KrbRelay
+        path: KrbRelay/bin/Release/KrbRelay.zip
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+
+    steps:
+    - name: Download Release Artifact
+      uses: actions/download-artifact@v2
+      with:
+        name: KrbRelay
+
+    - name: Create GitHub Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: 'v1.0.0'
+        release_name: 'KrbRelay v1.0.0'
+        body: 'Release of KrbRelay'
+        draft: false
+        prerelease: false
+
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: KrbRelay.zip
+        asset_name: KrbRelay.zip
+        asset_content_type: application/zip
